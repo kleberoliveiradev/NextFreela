@@ -21,6 +21,7 @@ create table if not exists public.nextfreela_tasks (
   user_id uuid not null references auth.users(id) on delete cascade,
   project_id uuid references public.nextfreela_projects(id) on delete set null,
   title text not null,
+  due_date date,
   week_day integer not null default 1 check (week_day between 1 and 7),
   priority text not null default 'normal',
   done boolean not null default false,
@@ -75,6 +76,8 @@ alter table public.nextfreela_payments enable row level security;
 alter table public.nextfreela_threads enable row level security;
 alter table public.nextfreela_messages enable row level security;
 alter table public.nextfreela_alerts enable row level security;
+
+alter table public.nextfreela_tasks add column if not exists due_date date;
 
 drop policy if exists "projects owner access" on public.nextfreela_projects;
 drop policy if exists "tasks owner access" on public.nextfreela_tasks;

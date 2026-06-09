@@ -229,7 +229,7 @@
       <label class="field">Tarefa<input id="task-name" value="Enviar previa para cliente"></label>
       <label class="field">Projeto<select id="task-project"></select></label>
       <div class="field-grid">
-        <label class="field">Dia<select id="task-day"></select></label>
+        <label class="field">Prazo<input id="task-due" type="date" value="2026-06-09"></label>
         <label class="field">Prioridade<select id="task-priority"><option value="alta">Alta</option><option value="media">Media</option><option value="normal">Normal</option></select></label>
       </div>
       <div class="split-actions">
@@ -248,10 +248,30 @@
         <label class="field">Prazo<input id="project-due" type="date" value="2026-06-24"></label>
         <label class="field">Valor (R$)<input id="project-value" type="number" value="2800"></label>
       </div>
-      <label class="field">Status<select id="project-status"><option value="ativo">Ativo</option><option value="revisao">Revisao</option><option value="aguardando">Aguardando</option></select></label>
+      <div class="field-grid">
+        <label class="field">Status<select id="project-status"><option value="ativo">Ativo</option><option value="revisao">Revisao</option><option value="aguardando">Aguardando</option><option value="atrasado">Atrasado</option><option value="concluido">Concluido</option></select></label>
+        <label class="field">Progresso (%)<input id="project-progress" type="number" min="0" max="100" value="8"></label>
+      </div>
       <div class="split-actions">
         <button class="button button-ghost">Cancelar</button>
         <button class="button button-primary" id="save-project" value="default">Criar projeto</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="payment-dialog" class="modal">
+    <form method="dialog">
+      <h3>Novo pagamento</h3>
+      <label class="field">Projeto<select id="payment-project"></select></label>
+      <label class="field">Descricao<input id="payment-description" value="Parcela 1/2"></label>
+      <div class="field-grid">
+        <label class="field">Vencimento<input id="payment-due" type="date" value="2026-06-15"></label>
+        <label class="field">Valor (R$)<input id="payment-value" type="number" value="1200"></label>
+      </div>
+      <label class="field">Status<select id="payment-status"><option value="pendente">Pendente</option><option value="pago">Pago</option><option value="atrasado">Atrasado</option></select></label>
+      <div class="split-actions">
+        <button class="button button-ghost">Cancelar</button>
+        <button class="button button-primary" id="save-payment" value="default">Salvar pagamento</button>
       </div>
     </form>
   </dialog>

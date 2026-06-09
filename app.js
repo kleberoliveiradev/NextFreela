@@ -53,6 +53,9 @@ const seed = {
 
 let state = JSON.parse(localStorage.getItem(storageKey) || "null") || structuredClone(seed);
 let projectFilter = "todos";
+let editingProjectId = null;
+let editingTaskId = null;
+let editingPaymentId = null;
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
@@ -66,6 +69,33 @@ const save = () => {
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const isUuid = (value) => typeof value === "string" && uuidPattern.test(value);
 const newId = () => crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+const todayISO = () => new Date().toISOString().slice(0, 10);
+const addDaysISO = (days) => {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return date.toISOString().slice(0, 10);
+};
+
+function taskDue(task) {
+  if (task.due) return task.due;
+  return addDaysISO((task.day || 1) - 1);
+}
+
+function taskWeekDay(task) {
+  const date = new Date(`${taskDue(task)}T12:00:00`);
+  return ((date.getDay() + 6) % 7) + 1;
+}
+
+function normalizeLocalState() {
+  state.selectedClient = state.selectedClient || 0;
+  state.projects = state.projects || [];
+  state.tasks = (state.tasks || []).map((task) => ({ ...task, due: taskDue(task), day: taskWeekDay(task) }));
+  state.payments = state.payments || [];
+  state.messages = state.messages || [];
+  state.alerts = state.alerts || [];
+}
+
+normalizeLocalState();
 
 function queueCloudSave() {
   if (!supabase || !currentUser) return;
@@ -168,6 +198,7 @@ async function loadRelationalState() {
       id: task.id,
       title: task.title,
       projectId: task.project_id,
+      due: task.due_date || addDaysISO((task.week_day || 1) - 1),
       day: task.week_day,
       priority: task.priority,
       done: task.done
@@ -226,7 +257,8 @@ async function persistRelationalState() {
     user_id: userId,
     project_id: isUuid(task.projectId) ? task.projectId : null,
     title: task.title,
-    week_day: task.day,
+    due_date: taskDue(task),
+    week_day: taskWeekDay(task),
     priority: task.priority,
     done: task.done
   }));
@@ -269,11 +301,11 @@ async function persistRelationalState() {
 }
 
 function statusLabel(status) {
-  return { ativo: "Ativo", revisao: "Revisao", atrasado: "Atrasado", aguardando: "Aguardando", pago: "Pago", pendente: "Pendente" }[status] || status;
+  return { ativo: "Ativo", revisao: "Revisao", atrasado: "Atrasado", aguardando: "Aguardando", concluido: "Concluido", pago: "Pago", pendente: "Pendente" }[status] || status;
 }
 
 function statusClass(status) {
-  return { ativo: "active", revisao: "review", atrasado: "late", aguardando: "wait", pago: "active", pendente: "review" }[status] || "done";
+  return { ativo: "active", revisao: "review", atrasado: "late", aguardando: "wait", concluido: "done", pago: "active", pendente: "review" }[status] || "done";
 }
 
 function setView(view) {
@@ -339,6 +371,10 @@ async function loginWithEmail() {
     setNotice(result.error.message, "error");
     return;
   }
+  if (!result.data.session) {
+    setNotice("Conta criada. Confirme seu email para entrar no NextFreela.");
+    return;
+  }
   currentUser = result.data.user;
   await loadCloudState();
   renderAccountState();
@@ -364,11 +400,28 @@ async function logout() {
   showAuth("login");
 }
 
+async function sendRecoveryEmail() {
+  if (!supabase) {
+    $("#recovery-notice").classList.remove("hidden");
+    return;
+  }
+  const email = $("#recover-panel input").value.trim();
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: window.location.origin
+  });
+  const notice = $("#recovery-notice");
+  notice.textContent = error ? error.message : "Link enviado. Verifique sua caixa de entrada.";
+  notice.style.background = error ? "#fee2e2" : "#dcfce7";
+  notice.style.color = error ? "#b91c1c" : "#15803d";
+  notice.classList.remove("hidden");
+}
+
 function renderMetrics() {
   const activeProjects = state.projects.filter((project) => project.status !== "concluido").length;
   const dueSoon = state.projects.filter((project) => ["atrasado", "revisao"].includes(project.status)).length;
   const openTasks = state.tasks.filter((task) => !task.done).length;
   const pending = state.payments.filter((payment) => payment.status !== "pago").reduce((sum, payment) => sum + payment.value, 0);
+  const totalProjectValue = state.projects.reduce((sum, project) => sum + project.value, 0);
   $("#metrics").innerHTML = [
     ["Projetos ativos", activeProjects, `${dueSoon} exigem atencao`],
     ["Tarefas abertas", openTasks, "na semana atual"],
@@ -383,17 +436,22 @@ function renderMetrics() {
     ["Recebido", money(paid), "confirmado"],
     ["Pendente", money(state.payments.filter((p) => p.status === "pendente").reduce((s, p) => s + p.value, 0)), "a vencer"],
     ["Atrasado", money(state.payments.filter((p) => p.status === "atrasado").reduce((s, p) => s + p.value, 0)), "cobrar cliente"],
-    ["Ticket medio", money(Math.round(state.projects.reduce((s, p) => s + p.value, 0) / state.projects.length)), "por projeto"]
+    ["Ticket medio", money(state.projects.length ? Math.round(totalProjectValue / state.projects.length) : 0), "por projeto"]
   ].map(([label, value, sub]) => `<div class="metric"><span>${label}</span><strong>${value}</strong><small>${sub}</small></div>`).join("");
 }
 
 function taskTemplate(task) {
   const project = byId(task.projectId);
-  return `<button class="task-row ${task.done ? "done" : ""}" data-task="${task.id}">
+  return `<div class="task-row ${task.done ? "done" : ""}" data-task="${task.id}">
     <span class="task-check">✓</span>
-    <span class="task-main"><span class="task-title">${task.title}</span><span class="task-sub">${project?.name || "Sem projeto"}</span></span>
+    <span class="task-main"><span class="task-title">${task.title}</span><span class="task-sub">${project?.name || "Sem projeto"} · prazo ${formatShort(taskDue(task))}</span></span>
     <span class="status-badge ${task.priority === "alta" ? "late" : task.priority === "media" ? "review" : "wait"}">${task.priority}</span>
-  </button>`;
+    <span class="row-actions">
+      <button class="mini-button primary" data-action="toggle-task" data-task="${task.id}">${task.done ? "Reabrir" : "Concluir"}</button>
+      <button class="mini-button" data-action="edit-task" data-task="${task.id}">Editar</button>
+      <button class="mini-button danger" data-action="delete-task" data-task="${task.id}">Excluir</button>
+    </span>
+  </div>`;
 }
 
 function projectTemplate(project) {
@@ -402,6 +460,10 @@ function projectTemplate(project) {
     <span class="status-badge ${statusClass(project.status)}">${statusLabel(project.status)}</span>
     <div class="progress"><span style="width:${project.progress}%"></span></div>
     <div class="row-value">${money(project.value)}</div>
+    <span class="row-actions">
+      <button class="mini-button" data-action="edit-project" data-project="${project.id}">Editar</button>
+      <button class="mini-button danger" data-action="delete-project" data-project="${project.id}">Excluir</button>
+    </span>
   </div>`;
 }
 
@@ -411,11 +473,17 @@ function paymentTemplate(payment) {
     <span class="status-badge ${statusClass(payment.status)}">${statusLabel(payment.status)}</span>
     <div class="row-sub">${formatShort(payment.due)}</div>
     <div class="row-value">${money(payment.value)}</div>
+    <span class="row-actions">
+      <button class="mini-button primary" data-action="mark-payment-paid" data-payment="${payment.id}">Pago</button>
+      <button class="mini-button" data-action="edit-payment" data-payment="${payment.id}">Editar</button>
+      <button class="mini-button danger" data-action="delete-payment" data-payment="${payment.id}">Excluir</button>
+    </span>
   </div>`;
 }
 
 function renderDashboard() {
-  $("#today-tasks").innerHTML = state.tasks.filter((task) => task.day === 1).map(taskTemplate).join("");
+  const today = todayISO();
+  $("#today-tasks").innerHTML = state.tasks.filter((task) => taskDue(task) <= today && !task.done).map(taskTemplate).join("") || `<p class="row-sub">Nenhuma tarefa vencendo hoje.</p>`;
   $("#project-preview").innerHTML = state.projects.slice(0, 4).map(projectTemplate).join("");
   $("#payment-preview").innerHTML = state.payments.slice(0, 3).map(paymentTemplate).join("");
 }
@@ -426,13 +494,16 @@ function renderProjects() {
 }
 
 function renderAgenda() {
-  const days = [
-    ["Seg", "08"], ["Ter", "09"], ["Qua", "10"], ["Qui", "11"], ["Sex", "12"], ["Sab", "13"], ["Dom", "14"]
-  ];
-  $("#week-grid").innerHTML = days.map(([label, date], index) => {
-    const tasks = state.tasks.filter((task) => task.day === index + 1);
-    return `<div class="day-column ${index === 0 ? "today" : ""}">
-      <div class="day-head"><strong>${label}</strong><span>${date}</span></div>
+  const start = new Date();
+  start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+  const labels = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sab", "Dom"];
+  $("#week-grid").innerHTML = labels.map((label, index) => {
+    const dateObj = new Date(start);
+    dateObj.setDate(start.getDate() + index);
+    const dateIso = dateObj.toISOString().slice(0, 10);
+    const tasks = state.tasks.filter((task) => taskDue(task) === dateIso);
+    return `<div class="day-column ${dateIso === todayISO() ? "today" : ""}">
+      <div class="day-head"><strong>${label}</strong><span>${dateObj.getDate().toString().padStart(2, "0")}</span></div>
       ${tasks.map((task) => `<div class="day-task ${task.priority}"><strong>${task.title}</strong><span>${byId(task.projectId)?.name || ""}</span></div>`).join("")}
     </div>`;
   }).join("");
@@ -443,6 +514,13 @@ function renderFinance() {
 }
 
 function renderChat() {
+  if (!state.messages.length) {
+    $("#client-list").innerHTML = `<p class="row-sub">Nenhum cliente ainda.</p>`;
+    $("#chat-client").textContent = "Cliente";
+    $("#chat-project").textContent = "Crie um projeto para iniciar um atendimento";
+    $("#chat-messages").innerHTML = "";
+    return;
+  }
   $("#client-list").innerHTML = state.messages.map((thread, index) => `<button class="client-row ${index === state.selectedClient ? "active" : ""}" data-client="${index}">
     <span class="avatar">${thread.client.slice(0, 2).toUpperCase()}</span>
     <span class="row-main"><span class="row-title">${thread.client}</span><span class="row-sub">${thread.project}</span></span>
@@ -456,12 +534,31 @@ function renderChat() {
 
 function renderAlerts() {
   $("#alert-count").textContent = state.alerts.length;
-  $("#alerts-list").innerHTML = state.alerts.map((alert) => `<div class="alert-row"><span class="row-main"><span class="row-title">${alert}</span><span class="row-sub">Atualizado agora</span></span></div>`).join("") || `<p class="row-sub">Sem alertas no momento.</p>`;
+  const generated = buildSmartAlerts();
+  const alerts = [...generated, ...state.alerts];
+  $("#alert-count").textContent = alerts.length;
+  $("#alerts-list").innerHTML = alerts.map((alert) => `<div class="alert-row"><span class="row-main"><span class="row-title">${alert}</span><span class="row-sub">Atualizado agora</span></span></div>`).join("") || `<p class="row-sub">Sem alertas no momento.</p>`;
+}
+
+function buildSmartAlerts() {
+  const today = todayISO();
+  const alerts = [];
+  state.projects.forEach((project) => {
+    if (project.status !== "concluido" && project.due < today) alerts.push(`${project.name} esta com prazo ultrapassado.`);
+  });
+  state.tasks.forEach((task) => {
+    if (!task.done && taskDue(task) < today) alerts.push(`Tarefa atrasada: ${task.title}.`);
+  });
+  state.payments.forEach((payment) => {
+    if (payment.status !== "pago" && payment.due < today) alerts.push(`Pagamento atrasado: ${payment.project} (${money(payment.value)}).`);
+  });
+  return alerts;
 }
 
 function renderTaskOptions() {
-  $("#task-project").innerHTML = state.projects.map((project) => `<option value="${project.id}">${project.name}</option>`).join("");
-  $("#task-day").innerHTML = ["Segunda", "Terca", "Quarta", "Quinta", "Sexta", "Sabado", "Domingo"].map((day, index) => `<option value="${index + 1}">${day}</option>`).join("");
+  const options = state.projects.map((project) => `<option value="${project.id}">${project.name}</option>`).join("");
+  $("#task-project").innerHTML = options || `<option value="">Sem projeto</option>`;
+  $("#payment-project").innerHTML = options || `<option value="">Sem projeto</option>`;
 }
 
 function render() {
@@ -477,25 +574,112 @@ function render() {
 }
 
 function formatShort(value) {
+  if (!value) return "--/--";
   const [year, month, day] = value.split("-");
   return `${day}/${month}`;
 }
 
+function openProjectDialog(project = null) {
+  editingProjectId = project?.id || null;
+  $("#project-dialog h3").textContent = project ? "Editar projeto" : "Novo projeto";
+  $("#project-name").value = project?.name || "Landing page campanha";
+  $("#project-client").value = project?.client || "Cliente novo";
+  $("#project-due").value = project?.due || addDaysISO(14);
+  $("#project-value").value = project?.value || 2800;
+  $("#project-status").value = project?.status || "ativo";
+  $("#project-progress").value = project?.progress ?? 8;
+  $("#save-project").textContent = project ? "Salvar projeto" : "Criar projeto";
+  $("#project-dialog").showModal();
+}
+
+function openTaskDialog(task = null) {
+  editingTaskId = task?.id || null;
+  $("#task-dialog h3").textContent = task ? "Editar tarefa" : "Nova tarefa";
+  $("#task-name").value = task?.title || "Enviar previa para cliente";
+  $("#task-project").value = task?.projectId || state.projects[0]?.id || "";
+  $("#task-due").value = task ? taskDue(task) : todayISO();
+  $("#task-priority").value = task?.priority || "media";
+  $("#save-task").textContent = task ? "Salvar tarefa" : "Salvar";
+  $("#task-dialog").showModal();
+}
+
+function openPaymentDialog(payment = null) {
+  editingPaymentId = payment?.id || null;
+  $("#payment-dialog h3").textContent = payment ? "Editar pagamento" : "Novo pagamento";
+  const project = state.projects.find((item) => item.name === payment?.project) || state.projects[0];
+  $("#payment-project").value = project?.id || "";
+  $("#payment-description").value = payment?.description || "Parcela 1/2";
+  $("#payment-due").value = payment?.due || addDaysISO(7);
+  $("#payment-value").value = payment?.value || 1200;
+  $("#payment-status").value = payment?.status || "pendente";
+  $("#save-payment").textContent = payment ? "Salvar pagamento" : "Salvar pagamento";
+  $("#payment-dialog").showModal();
+}
+
+function deleteProject(projectId) {
+  if (!window.confirm("Excluir este projeto e suas tarefas vinculadas?")) return;
+  const project = byId(projectId);
+  state.projects = state.projects.filter((item) => item.id !== projectId);
+  state.tasks = state.tasks.filter((task) => task.projectId !== projectId);
+  state.payments = state.payments.filter((payment) => payment.project !== project?.name);
+  save();
+  render();
+}
+
+function deleteTask(taskId) {
+  if (!window.confirm("Excluir esta tarefa?")) return;
+  state.tasks = state.tasks.filter((task) => task.id !== taskId);
+  save();
+  render();
+}
+
+function deletePayment(paymentId) {
+  if (!window.confirm("Excluir este pagamento?")) return;
+  state.payments = state.payments.filter((payment) => payment.id !== paymentId);
+  save();
+  render();
+}
+
 function bindEvents() {
   document.addEventListener("click", (event) => {
+    const actionButton = event.target.closest("[data-action]");
+    if (actionButton) {
+      event.preventDefault();
+      event.stopPropagation();
+      const action = actionButton.dataset.action;
+      if (action === "toggle-task") {
+        const task = state.tasks.find((item) => item.id === actionButton.dataset.task);
+        if (task) task.done = !task.done;
+      }
+      if (action === "edit-task") {
+        openTaskDialog(state.tasks.find((item) => item.id === actionButton.dataset.task));
+        return;
+      }
+      if (action === "delete-task") deleteTask(actionButton.dataset.task);
+      if (action === "edit-project") {
+        openProjectDialog(state.projects.find((item) => item.id === actionButton.dataset.project));
+        return;
+      }
+      if (action === "delete-project") deleteProject(actionButton.dataset.project);
+      if (action === "mark-payment-paid") {
+        const payment = state.payments.find((item) => item.id === actionButton.dataset.payment);
+        if (payment) payment.status = "pago";
+      }
+      if (action === "edit-payment") {
+        openPaymentDialog(state.payments.find((item) => item.id === actionButton.dataset.payment));
+        return;
+      }
+      if (action === "delete-payment") deletePayment(actionButton.dataset.payment);
+      save();
+      render();
+      return;
+    }
+
     const viewButton = event.target.closest("[data-view]");
     if (viewButton) setView(viewButton.dataset.view);
 
     const authButton = event.target.closest("[data-auth]");
     if (authButton) showAuth(authButton.dataset.auth);
-
-    const taskRow = event.target.closest("[data-task]");
-    if (taskRow) {
-      const task = state.tasks.find((item) => item.id === Number(taskRow.dataset.task));
-      task.done = !task.done;
-      save();
-      render();
-    }
 
     const client = event.target.closest("[data-client]");
     if (client) {
@@ -505,39 +689,70 @@ function bindEvents() {
     }
   });
 
-  $("#quick-add").addEventListener("click", () => $("#task-dialog").showModal());
+  $("#quick-add").addEventListener("click", () => openTaskDialog());
   $("#email-login").addEventListener("click", loginWithEmail);
   $("#google-login").addEventListener("click", loginWithGoogle);
   $("#logout-button").addEventListener("click", logout);
-  $("#add-project").addEventListener("click", () => $("#project-dialog").showModal());
+  $("#add-project").addEventListener("click", () => openProjectDialog());
   $("#add-payment").addEventListener("click", () => {
-    const first = state.projects[0];
-    state.payments.unshift({ id: Date.now(), project: first.name, client: first.client, description: "Novo lancamento", due: "2026-06-15", value: 1200, status: "pendente" });
-    save();
-    render();
+    openPaymentDialog();
   });
   $("#save-task").addEventListener("click", () => {
-    state.tasks.push({
-      id: Date.now(),
+    const payload = {
+      id: editingTaskId || newId(),
       title: $("#task-name").value,
-      projectId: Number($("#task-project").value),
-      day: Number($("#task-day").value),
+      projectId: $("#task-project").value,
+      due: $("#task-due").value,
+      day: taskWeekDay({ due: $("#task-due").value }),
       priority: $("#task-priority").value,
-      done: false
-    });
+      done: editingTaskId ? state.tasks.find((task) => task.id === editingTaskId)?.done || false : false
+    };
+    if (editingTaskId) {
+      state.tasks = state.tasks.map((task) => task.id === editingTaskId ? payload : task);
+    } else {
+      state.tasks.push(payload);
+    }
+    editingTaskId = null;
     save();
     render();
   });
   $("#save-project").addEventListener("click", () => {
-    state.projects.unshift({
-      id: Date.now(),
+    const payload = {
+      id: editingProjectId || newId(),
       name: $("#project-name").value,
       client: $("#project-client").value,
       due: $("#project-due").value,
       value: Number($("#project-value").value),
-      progress: 8,
+      progress: Math.min(100, Math.max(0, Number($("#project-progress").value))),
       status: $("#project-status").value
-    });
+    };
+    if (editingProjectId) {
+      state.projects = state.projects.map((project) => project.id === editingProjectId ? payload : project);
+    } else {
+      state.projects.unshift(payload);
+      state.messages.unshift({ id: newId(), client: payload.client, project: payload.name, items: [] });
+    }
+    editingProjectId = null;
+    save();
+    render();
+  });
+  $("#save-payment").addEventListener("click", () => {
+    const project = byId($("#payment-project").value) || state.projects[0] || { name: "Sem projeto", client: "Cliente" };
+    const payload = {
+      id: editingPaymentId || newId(),
+      project: project.name,
+      client: project.client,
+      description: $("#payment-description").value,
+      due: $("#payment-due").value,
+      value: Number($("#payment-value").value),
+      status: $("#payment-status").value
+    };
+    if (editingPaymentId) {
+      state.payments = state.payments.map((payment) => payment.id === editingPaymentId ? payload : payment);
+    } else {
+      state.payments.unshift(payload);
+    }
+    editingPaymentId = null;
     save();
     render();
   });
@@ -564,7 +779,7 @@ function bindEvents() {
     save();
     renderAlerts();
   });
-  $("#send-recovery").addEventListener("click", () => $("#recovery-notice").classList.remove("hidden"));
+  $("#send-recovery").addEventListener("click", sendRecoveryEmail);
   $("#create-first-project").addEventListener("click", () => {
     state.projects.unshift({
       id: Date.now(),

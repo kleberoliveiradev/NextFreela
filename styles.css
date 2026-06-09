@@ -334,6 +334,7 @@ button { cursor: pointer; }
 .project-row.revisao, .payment-row.pendente { border-left-color: var(--orange); }
 .project-row.atrasado, .payment-row.atrasado { border-left-color: var(--red); }
 .project-row.aguardando { border-left-color: var(--slate); }
+.project-row.concluido { border-left-color: #a3a3a3; opacity: .72; }
 .progress {
   flex: 0 0 140px;
   height: 5px;
@@ -343,6 +344,24 @@ button { cursor: pointer; }
 }
 .progress span { display: block; height: 100%; background: var(--orange); }
 .row-value { width: 92px; text-align: right; font-weight: 700; font-size: 13px; }
+.row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+.mini-button {
+  border: .5px solid var(--border);
+  border-radius: 7px;
+  background: var(--white);
+  color: var(--text-sec);
+  padding: 6px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.mini-button.primary { color: var(--orange); border-color: var(--orange-border); background: var(--orange-soft); }
+.mini-button.danger { color: #b91c1c; border-color: #fecaca; background: #fff1f2; }
 .toolbar { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
 .tabs { display: flex; gap: 4px; overflow-x: auto; }
 .tabs button {
@@ -542,6 +561,7 @@ body.compact .task-row, body.compact .project-row, body.compact .payment-row { p
   .top-actions, .split-actions, .field-grid { display: grid; grid-template-columns: 1fr; }
   .metrics { grid-template-columns: 1fr; }
   .row-value { width: auto; }
-  .project-row, .payment-row { align-items: flex-start; flex-direction: column; }
+  .project-row, .payment-row, .task-row { align-items: flex-start; flex-direction: column; }
+  .row-actions { margin-left: 0; flex-wrap: wrap; }
   .message { max-width: 86%; }
 }
