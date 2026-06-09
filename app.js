@@ -97,6 +97,23 @@ function normalizeLocalState() {
 
 normalizeLocalState();
 
+const emptyState = () => ({
+  selectedClient: 0,
+  projects: [],
+  tasks: [],
+  payments: [],
+  messages: [],
+  alerts: []
+});
+
+function emptyBlock(title, text, action, label) {
+  return `<div class="empty-block">
+    <strong>${title}</strong>
+    <span>${text}</span>
+    ${action ? `<button class="button button-primary" data-action="${action}">${label}</button>` : ""}
+  </div>`;
+}
+
 function queueCloudSave() {
   if (!supabase || !currentUser) return;
   window.clearTimeout(syncTimer);
@@ -178,11 +195,6 @@ async function loadRelationalState() {
   const firstError = results.find((result) => result.error)?.error;
   if (firstError) throw firstError;
 
-  if (!projectsRes.data.length) {
-    await persistRelationalState();
-    return;
-  }
-
   state = {
     selectedClient: 0,
     projects: projectsRes.data.map((project) => ({
@@ -227,6 +239,9 @@ async function loadRelationalState() {
     })),
     alerts: alertsRes.data.map((alert) => alert.text)
   };
+  if (!projectsRes.data.length && !tasksRes.data.length && !paymentsRes.data.length && !threadsRes.data.length) {
+    state = emptyState();
+  }
   localStorage.setItem(storageKey, JSON.stringify(state));
 }
 
@@ -355,6 +370,10 @@ function setNotice(message, type = "info") {
   notice.style.color = type === "error" ? "#b91c1c" : "#15803d";
 }
 
+function toast(message) {
+  window.alert(message);
+}
+
 async function loginWithEmail() {
   if (!supabase) {
     showAuth("dashboard");
@@ -396,6 +415,8 @@ async function loginWithGoogle() {
 async function logout() {
   if (supabase) await supabase.auth.signOut();
   currentUser = null;
+  state = structuredClone(seed);
+  normalizeLocalState();
   renderAccountState();
   showAuth("login");
 }
@@ -483,14 +504,14 @@ function paymentTemplate(payment) {
 
 function renderDashboard() {
   const today = todayISO();
-  $("#today-tasks").innerHTML = state.tasks.filter((task) => taskDue(task) <= today && !task.done).map(taskTemplate).join("") || `<p class="row-sub">Nenhuma tarefa vencendo hoje.</p>`;
-  $("#project-preview").innerHTML = state.projects.slice(0, 4).map(projectTemplate).join("");
-  $("#payment-preview").innerHTML = state.payments.slice(0, 3).map(paymentTemplate).join("");
+  $("#today-tasks").innerHTML = state.tasks.filter((task) => taskDue(task) <= today && !task.done).map(taskTemplate).join("") || emptyBlock("Tudo em dia", "Crie uma tarefa com prazo para organizar sua semana.", "new-task", "Criar tarefa");
+  $("#project-preview").innerHTML = state.projects.slice(0, 4).map(projectTemplate).join("") || emptyBlock("Nenhum projeto cadastrado", "Comece adicionando seu primeiro cliente e prazo.", "new-project", "Criar projeto");
+  $("#payment-preview").innerHTML = state.payments.slice(0, 3).map(paymentTemplate).join("") || emptyBlock("Sem lancamentos", "Registre parcelas, sinais e pagamentos recebidos.", "new-payment", "Registrar");
 }
 
 function renderProjects() {
   const projects = projectFilter === "todos" ? state.projects : state.projects.filter((project) => project.status === projectFilter);
-  $("#project-list").innerHTML = projects.map(projectTemplate).join("") || `<p class="row-sub">Nenhum projeto nesse filtro.</p>`;
+  $("#project-list").innerHTML = projects.map(projectTemplate).join("") || emptyBlock("Nenhum projeto nesse filtro", "Crie um projeto real para comecar a usar o NextFreela no dia a dia.", "new-project", "Novo projeto");
 }
 
 function renderAgenda() {
@@ -510,12 +531,12 @@ function renderAgenda() {
 }
 
 function renderFinance() {
-  $("#payment-list").innerHTML = state.payments.map(paymentTemplate).join("");
+  $("#payment-list").innerHTML = state.payments.map(paymentTemplate).join("") || emptyBlock("Nenhum pagamento registrado", "Lance valores a receber, recebidos e atrasados por projeto.", "new-payment", "Registrar pagamento");
 }
 
 function renderChat() {
   if (!state.messages.length) {
-    $("#client-list").innerHTML = `<p class="row-sub">Nenhum cliente ainda.</p>`;
+    $("#client-list").innerHTML = emptyBlock("Sem clientes", "Clientes aparecem quando voce cria projetos.", "new-project", "Criar projeto");
     $("#chat-client").textContent = "Cliente";
     $("#chat-project").textContent = "Crie um projeto para iniciar um atendimento";
     $("#chat-messages").innerHTML = "";
@@ -593,6 +614,11 @@ function openProjectDialog(project = null) {
 }
 
 function openTaskDialog(task = null) {
+  if (!state.projects.length) {
+    toast("Crie um projeto antes de adicionar tarefas.");
+    openProjectDialog();
+    return;
+  }
   editingTaskId = task?.id || null;
   $("#task-dialog h3").textContent = task ? "Editar tarefa" : "Nova tarefa";
   $("#task-name").value = task?.title || "Enviar previa para cliente";
@@ -604,6 +630,11 @@ function openTaskDialog(task = null) {
 }
 
 function openPaymentDialog(payment = null) {
+  if (!state.projects.length) {
+    toast("Crie um projeto antes de registrar pagamentos.");
+    openProjectDialog();
+    return;
+  }
   editingPaymentId = payment?.id || null;
   $("#payment-dialog h3").textContent = payment ? "Editar pagamento" : "Novo pagamento";
   const project = state.projects.find((item) => item.name === payment?.project) || state.projects[0];
@@ -650,6 +681,18 @@ function bindEvents() {
       if (action === "toggle-task") {
         const task = state.tasks.find((item) => item.id === actionButton.dataset.task);
         if (task) task.done = !task.done;
+      }
+      if (action === "new-project") {
+        openProjectDialog();
+        return;
+      }
+      if (action === "new-task") {
+        openTaskDialog();
+        return;
+      }
+      if (action === "new-payment") {
+        openPaymentDialog();
+        return;
       }
       if (action === "edit-task") {
         openTaskDialog(state.tasks.find((item) => item.id === actionButton.dataset.task));
@@ -781,15 +824,17 @@ function bindEvents() {
   });
   $("#send-recovery").addEventListener("click", sendRecoveryEmail);
   $("#create-first-project").addEventListener("click", () => {
-    state.projects.unshift({
-      id: Date.now(),
+    const project = {
+      id: newId(),
       name: $("#first-project-name").value,
       client: $("#first-project-client").value,
       value: Number($("#first-project-value").value),
       due: $("#first-project-date").value,
       progress: 0,
       status: "ativo"
-    });
+    };
+    state.projects.unshift(project);
+    state.messages.unshift({ id: newId(), client: project.client, project: project.name, items: [] });
     save();
     showAuth("dashboard");
   });
