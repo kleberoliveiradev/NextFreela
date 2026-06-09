@@ -83,8 +83,8 @@ npm run deploy
 
 - `index.html`: interface principal.
 - `styles.css`: design system visual.
-- `app.js`: interacoes, estado local e sincronizacao opcional com Supabase.
-- `supabase-schema.sql`: tabela e politicas de seguranca.
+- `app.js`: interacoes, estado local e sincronizacao opcional com tabelas Supabase.
+- `supabase-schema.sql`: tabelas de projetos, tarefas, pagamentos, conversas, mensagens e alertas com politicas de seguranca.
 - `vercel.json`: configuracao de deploy.
 
 ## Checklist de plataforma real
@@ -94,6 +94,7 @@ npm run deploy
 - [x] Login por Google preparado.
 - [x] Banco Supabase preparado.
 - [x] Dados por usuario com Row Level Security.
+- [x] Tabelas reais para projetos, tarefas, pagamentos, mensagens e alertas.
 - [ ] Criar projeto no Supabase.
 - [ ] Colar e executar `supabase-schema.sql`.
 - [ ] Configurar variaveis na Vercel.

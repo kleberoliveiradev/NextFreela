@@ -7,6 +7,7 @@ const supabaseConfig = {
 let supabase = null;
 let currentUser = null;
 let cloudAvailable = false;
+let syncTimer = null;
 
 const seed = {
   selectedClient: 0,
@@ -59,8 +60,18 @@ const money = (value) => value.toLocaleString("pt-BR", { style: "currency", curr
 const byId = (id) => state.projects.find((project) => project.id === id);
 const save = () => {
   localStorage.setItem(storageKey, JSON.stringify(state));
-  persistCloudState();
+  queueCloudSave();
 };
+
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const isUuid = (value) => typeof value === "string" && uuidPattern.test(value);
+const newId = () => crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+function queueCloudSave() {
+  if (!supabase || !currentUser) return;
+  window.clearTimeout(syncTimer);
+  syncTimer = window.setTimeout(() => persistCloudState(), 500);
+}
 
 async function initSupabase() {
   if (!supabaseConfig.url || !supabaseConfig.anonKey) return false;
@@ -89,33 +100,172 @@ async function initSupabase() {
 
 async function loadCloudState() {
   if (!supabase || !currentUser) return;
-  const { data, error } = await supabase
-    .from("nextfreela_states")
-    .select("data")
-    .eq("user_id", currentUser.id)
-    .maybeSingle();
-  if (error) {
+  try {
+    await loadRelationalState();
+  } catch (error) {
     console.warn("Nao foi possivel carregar dados do Supabase.", error);
-    return;
-  }
-  if (data?.data) {
-    state = data.data;
-    localStorage.setItem(storageKey, JSON.stringify(state));
-  } else {
-    await persistCloudState();
   }
 }
 
 async function persistCloudState() {
   if (!supabase || !currentUser) return;
-  const { error } = await supabase
-    .from("nextfreela_states")
-    .upsert({
-      user_id: currentUser.id,
-      data: state,
-      updated_at: new Date().toISOString()
-    });
-  if (error) console.warn("Nao foi possivel sincronizar com Supabase.", error);
+  try {
+    await persistRelationalState();
+  } catch (error) {
+    console.warn("Nao foi possivel sincronizar com Supabase.", error);
+  }
+}
+
+function normalizeCloudIds() {
+  const projectMap = new Map();
+  state.projects = state.projects.map((project) => {
+    const id = isUuid(project.id) ? project.id : newId();
+    projectMap.set(project.id, id);
+    return { ...project, id };
+  });
+  state.tasks = state.tasks.map((task) => ({
+    ...task,
+    id: isUuid(task.id) ? task.id : newId(),
+    projectId: projectMap.get(task.projectId) || task.projectId
+  }));
+  state.payments = state.payments.map((payment) => ({
+    ...payment,
+    id: isUuid(payment.id) ? payment.id : newId()
+  }));
+  localStorage.setItem(storageKey, JSON.stringify(state));
+}
+
+async function loadRelationalState() {
+  const userId = currentUser.id;
+  const [projectsRes, tasksRes, paymentsRes, threadsRes, alertsRes] = await Promise.all([
+    supabase.from("nextfreela_projects").select("*").eq("user_id", userId).order("created_at", { ascending: true }),
+    supabase.from("nextfreela_tasks").select("*").eq("user_id", userId).order("created_at", { ascending: true }),
+    supabase.from("nextfreela_payments").select("*").eq("user_id", userId).order("created_at", { ascending: true }),
+    supabase.from("nextfreela_threads").select("*, nextfreela_messages(*)").eq("user_id", userId).order("position", { ascending: true }),
+    supabase.from("nextfreela_alerts").select("*").eq("user_id", userId).order("created_at", { ascending: true })
+  ]);
+  const results = [projectsRes, tasksRes, paymentsRes, threadsRes, alertsRes];
+  const firstError = results.find((result) => result.error)?.error;
+  if (firstError) throw firstError;
+
+  if (!projectsRes.data.length) {
+    await persistRelationalState();
+    return;
+  }
+
+  state = {
+    selectedClient: 0,
+    projects: projectsRes.data.map((project) => ({
+      id: project.id,
+      name: project.name,
+      client: project.client,
+      due: project.due_date,
+      value: Number(project.value),
+      progress: project.progress,
+      status: project.status
+    })),
+    tasks: tasksRes.data.map((task) => ({
+      id: task.id,
+      title: task.title,
+      projectId: task.project_id,
+      day: task.week_day,
+      priority: task.priority,
+      done: task.done
+    })),
+    payments: paymentsRes.data.map((payment) => ({
+      id: payment.id,
+      project: payment.project_name,
+      client: payment.client,
+      description: payment.description,
+      due: payment.due_date,
+      value: Number(payment.value),
+      status: payment.status
+    })),
+    messages: threadsRes.data.map((thread) => ({
+      id: thread.id,
+      client: thread.client,
+      project: thread.project,
+      items: (thread.nextfreela_messages || [])
+        .sort((a, b) => new Date(a.sent_at) - new Date(b.sent_at))
+        .map((message) => ({
+          id: message.id,
+          mine: message.mine,
+          text: message.text,
+          time: new Date(message.sent_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+        }))
+    })),
+    alerts: alertsRes.data.map((alert) => alert.text)
+  };
+  localStorage.setItem(storageKey, JSON.stringify(state));
+}
+
+async function persistRelationalState() {
+  normalizeCloudIds();
+  const userId = currentUser.id;
+  await supabase.from("nextfreela_messages").delete().eq("user_id", userId);
+  await supabase.from("nextfreela_threads").delete().eq("user_id", userId);
+  await supabase.from("nextfreela_alerts").delete().eq("user_id", userId);
+  await supabase.from("nextfreela_payments").delete().eq("user_id", userId);
+  await supabase.from("nextfreela_tasks").delete().eq("user_id", userId);
+  await supabase.from("nextfreela_projects").delete().eq("user_id", userId);
+
+  const projectRows = state.projects.map((project) => ({
+    id: project.id,
+    user_id: userId,
+    name: project.name,
+    client: project.client,
+    due_date: project.due,
+    value: project.value,
+    progress: project.progress,
+    status: project.status
+  }));
+  if (projectRows.length) await supabase.from("nextfreela_projects").insert(projectRows).throwOnError();
+
+  const taskRows = state.tasks.map((task) => ({
+    id: task.id,
+    user_id: userId,
+    project_id: isUuid(task.projectId) ? task.projectId : null,
+    title: task.title,
+    week_day: task.day,
+    priority: task.priority,
+    done: task.done
+  }));
+  if (taskRows.length) await supabase.from("nextfreela_tasks").insert(taskRows).throwOnError();
+
+  const paymentRows = state.payments.map((payment) => ({
+    id: payment.id,
+    user_id: userId,
+    project_name: payment.project,
+    client: payment.client,
+    description: payment.description,
+    due_date: payment.due,
+    value: payment.value,
+    status: payment.status
+  }));
+  if (paymentRows.length) await supabase.from("nextfreela_payments").insert(paymentRows).throwOnError();
+
+  const threadRows = state.messages.map((thread, index) => ({
+    id: isUuid(thread.id) ? thread.id : newId(),
+    user_id: userId,
+    client: thread.client,
+    project: thread.project,
+    position: index
+  }));
+  state.messages = state.messages.map((thread, index) => ({ ...thread, id: threadRows[index].id }));
+  if (threadRows.length) await supabase.from("nextfreela_threads").insert(threadRows).throwOnError();
+
+  const messageRows = state.messages.flatMap((thread) => thread.items.map((message) => ({
+    id: isUuid(message.id) ? message.id : newId(),
+    user_id: userId,
+    thread_id: thread.id,
+    mine: message.mine,
+    text: message.text,
+    sent_at: message.time ? `2026-06-09T${message.time}:00-03:00` : new Date().toISOString()
+  })));
+  if (messageRows.length) await supabase.from("nextfreela_messages").insert(messageRows).throwOnError();
+
+  const alertRows = state.alerts.map((alert) => ({ user_id: userId, text: alert }));
+  if (alertRows.length) await supabase.from("nextfreela_alerts").insert(alertRows).throwOnError();
 }
 
 function statusLabel(status) {

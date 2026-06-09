@@ -21,7 +21,16 @@ Siga estes passos no navegador.
 5. Cole no SQL Editor.
 6. Clique em **Run**.
 
-Isso cria a tabela `nextfreela_states` e protege os dados para cada usuario ver apenas a propria conta.
+Isso cria as tabelas reais do produto:
+
+- `nextfreela_projects`
+- `nextfreela_tasks`
+- `nextfreela_payments`
+- `nextfreela_threads`
+- `nextfreela_messages`
+- `nextfreela_alerts`
+
+Todas ficam protegidas para cada usuario ver apenas os proprios dados.
 
 ## 3. Ativar login por email
 
