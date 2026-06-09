@@ -179,6 +179,16 @@ button { cursor: pointer; }
 .profile strong, .profile span { display: block; }
 .profile strong { font-size: 13px; }
 .profile span { color: var(--text-ter); font-size: 11px; }
+.profile-logout {
+  margin-left: auto;
+  border: .5px solid var(--border);
+  border-radius: 8px;
+  background: var(--white);
+  color: var(--text-sec);
+  padding: 6px 9px;
+  font-size: 11px;
+  font-weight: 700;
+}
 
 .main { padding: 24px; min-width: 0; }
 .topbar {
@@ -197,6 +207,21 @@ button { cursor: pointer; }
 }
 .topbar h2 { margin: 0; font-size: 24px; letter-spacing: -.3px; }
 .top-actions { display: flex; gap: 8px; align-items: center; }
+.sync-pill {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: var(--white);
+  border: .5px solid var(--border);
+  color: var(--text-sec);
+  padding: 7px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.sync-pill.cloud { background: #dcfce7; border-color: #bbf7d0; color: #15803d; }
+.sync-pill.demo { background: var(--orange-soft); border-color: var(--orange-border); color: #c2440a; }
 .button {
   min-height: 38px;
   border-radius: 8px;

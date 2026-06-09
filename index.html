@@ -87,9 +87,10 @@
       <div class="profile">
         <div class="avatar">JR</div>
         <div>
-          <strong>Joao R.</strong>
-          <span>Plano Pro</span>
+          <strong id="profile-name">Joao R.</strong>
+          <span id="profile-mode">Modo demonstracao</span>
         </div>
+        <button class="profile-logout hidden" id="logout-button" title="Sair da conta">Sair</button>
       </div>
     </aside>
 
@@ -100,6 +101,7 @@
           <h2 id="view-title">Bom dia, Joao!</h2>
         </div>
         <div class="top-actions">
+          <span class="sync-pill" id="sync-pill">Demo local</span>
           <button class="icon-button" data-view="alertas" aria-label="Alertas"><span data-icon="bell"></span><i></i></button>
           <button class="button button-primary" id="quick-add"><span data-icon="plus"></span>Nova tarefa</button>
         </div>

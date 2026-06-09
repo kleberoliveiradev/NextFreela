@@ -6,6 +6,7 @@ const supabaseConfig = {
 };
 let supabase = null;
 let currentUser = null;
+let cloudAvailable = false;
 
 const seed = {
   selectedClient: 0,
@@ -66,6 +67,7 @@ async function initSupabase() {
   try {
     const { createClient } = await import("@supabase/supabase-js");
     supabase = createClient(supabaseConfig.url, supabaseConfig.anonKey);
+    cloudAvailable = true;
     const { data } = await supabase.auth.getSession();
     currentUser = data.session?.user || null;
     supabase.auth.onAuthStateChange(async (_event, session) => {
@@ -76,9 +78,11 @@ async function initSupabase() {
       }
     });
     if (currentUser) await loadCloudState();
+    renderAccountState();
     return true;
   } catch (error) {
     console.warn("Supabase indisponivel, usando modo demonstracao.", error);
+    renderAccountState();
     return false;
   }
 }
@@ -151,6 +155,16 @@ function showAuth(panel) {
   });
 }
 
+function renderAccountState() {
+  const email = currentUser?.email;
+  const isCloud = Boolean(supabase && currentUser);
+  $("#profile-name").textContent = email ? email.split("@")[0] : "Joao R.";
+  $("#profile-mode").textContent = isCloud ? "Conta sincronizada" : cloudAvailable ? "Supabase pronto" : "Modo demonstracao";
+  $("#sync-pill").textContent = isCloud ? "Sincronizado" : cloudAvailable ? "Aguardando login" : "Demo local";
+  $("#sync-pill").className = `sync-pill ${isCloud ? "cloud" : "demo"}`;
+  $("#logout-button").classList.toggle("hidden", !isCloud);
+}
+
 function setNotice(message, type = "info") {
   const notice = $("#login-notice");
   notice.textContent = message;
@@ -177,6 +191,7 @@ async function loginWithEmail() {
   }
   currentUser = result.data.user;
   await loadCloudState();
+  renderAccountState();
   showAuth("dashboard");
 }
 
@@ -190,6 +205,13 @@ async function loginWithGoogle() {
     options: { redirectTo: window.location.origin }
   });
   if (error) setNotice(error.message, "error");
+}
+
+async function logout() {
+  if (supabase) await supabase.auth.signOut();
+  currentUser = null;
+  renderAccountState();
+  showAuth("login");
 }
 
 function renderMetrics() {
@@ -293,6 +315,7 @@ function renderTaskOptions() {
 }
 
 function render() {
+  renderAccountState();
   renderMetrics();
   renderDashboard();
   renderProjects();
@@ -335,6 +358,7 @@ function bindEvents() {
   $("#quick-add").addEventListener("click", () => $("#task-dialog").showModal());
   $("#email-login").addEventListener("click", loginWithEmail);
   $("#google-login").addEventListener("click", loginWithGoogle);
+  $("#logout-button").addEventListener("click", logout);
   $("#add-project").addEventListener("click", () => $("#project-dialog").showModal());
   $("#add-payment").addEventListener("click", () => {
     const first = state.projects[0];
