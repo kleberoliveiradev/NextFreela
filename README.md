@@ -7,6 +7,8 @@ O app funciona em dois modos:
 - **Demo local**: sem Supabase, salva os dados no navegador.
 - **Conta sincronizada**: com Supabase, salva os dados na nuvem por usuario.
 
+Em producao, o Supabase e obrigatorio. Se as variaveis da Vercel nao estiverem configuradas, o app mostra uma tela de configuracao em vez de abrir um painel falso com dados de exemplo.
+
 ## Rodar localmente
 
 1. Instale as dependencias:

@@ -21,14 +21,14 @@
 
     <section class="auth-panel" id="login-panel">
       <div>
-        <h2>Entrar no NextFreela</h2>
-        <p>Escolha como quer acessar</p>
+        <h2>Acessar sua conta</h2>
+        <p>Entre ou crie sua conta para salvar seus projetos na nuvem.</p>
       </div>
       <button class="button button-ghost full" id="google-login">Continuar com Google</button>
       <div class="divider"><span></span>ou entre com email<span></span></div>
       <label class="field">Email<input type="email" placeholder="seu@email.com"></label>
       <label class="field">Senha<input type="password" placeholder="minimo 6 caracteres"></label>
-      <button class="button button-primary full" id="email-login">Entrar</button>
+      <button class="button button-primary full" id="email-login">Entrar ou criar conta</button>
       <p class="notice hidden" id="login-notice"></p>
       <button class="text-button" data-auth="recover">Esqueci minha senha</button>
       <p class="terms">Nao tem conta? <button data-auth="onboarding">Criar conta gratis</button></p>
@@ -69,6 +69,21 @@
     </section>
   </div>
 
+  <div id="setup-required" class="setup-shell hidden">
+    <section class="setup-card">
+      <div class="brand">Next<span>Freela</span></div>
+      <h1>Conecte o banco para ativar o SaaS</h1>
+      <p>Esta instalacao esta publicada sem as variaveis do Supabase. Para vender e usar com contas reais, configure o banco na Vercel.</p>
+      <div class="setup-list">
+        <div><strong>1</strong><span>Crie ou abra o projeto no Supabase.</span></div>
+        <div><strong>2</strong><span>Execute o arquivo <b>supabase-schema.sql</b> no SQL Editor.</span></div>
+        <div><strong>3</strong><span>Na Vercel, adicione <b>VITE_SUPABASE_URL</b> e <b>VITE_SUPABASE_ANON_KEY</b>.</span></div>
+        <div><strong>4</strong><span>Faca redeploy do projeto.</span></div>
+      </div>
+      <button class="button button-primary" id="open-demo-anyway">Abrir modo demonstracao local</button>
+    </section>
+  </div>
+
   <div id="app" class="app-shell hidden">
     <aside class="sidebar">
       <div class="sidebar-logo brand">Next<span>Freela</span></div>
@@ -101,7 +116,7 @@
           <h2 id="view-title">Bom dia, Joao!</h2>
         </div>
         <div class="top-actions">
-          <span class="sync-pill" id="sync-pill">Demo local</span>
+          <span class="sync-pill" id="sync-pill">Carregando</span>
           <button class="icon-button" data-view="alertas" aria-label="Alertas"><span data-icon="bell"></span><i></i></button>
           <button class="button button-primary" id="quick-add"><span data-icon="plus"></span>Nova tarefa</button>
         </div>

@@ -4,10 +4,13 @@ const supabaseConfig = {
   url: env.VITE_SUPABASE_URL,
   anonKey: env.VITE_SUPABASE_ANON_KEY
 };
+const isLocalHost = ["localhost", "127.0.0.1", ""].includes(window.location.hostname) || window.location.protocol === "file:";
+const hasSupabaseConfig = Boolean(supabaseConfig.url && supabaseConfig.anonKey);
 let supabase = null;
 let currentUser = null;
 let cloudAvailable = false;
 let syncTimer = null;
+let demoAllowed = isLocalHost || localStorage.getItem("nextfreela-demo-allowed") === "true";
 
 const seed = {
   selectedClient: 0,
@@ -51,7 +54,7 @@ const seed = {
   ]
 };
 
-let state = JSON.parse(localStorage.getItem(storageKey) || "null") || structuredClone(seed);
+let state = demoAllowed ? JSON.parse(localStorage.getItem(storageKey) || "null") || structuredClone(seed) : emptyState();
 let projectFilter = "todos";
 let editingProjectId = null;
 let editingTaskId = null;
@@ -61,8 +64,9 @@ const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
 const money = (value) => value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const byId = (id) => state.projects.find((project) => project.id === id);
+const activeStorageKey = () => currentUser ? `${storageKey}-${currentUser.id}` : storageKey;
 const save = () => {
-  localStorage.setItem(storageKey, JSON.stringify(state));
+  localStorage.setItem(activeStorageKey(), JSON.stringify(state));
   queueCloudSave();
 };
 
@@ -121,7 +125,10 @@ function queueCloudSave() {
 }
 
 async function initSupabase() {
-  if (!supabaseConfig.url || !supabaseConfig.anonKey) return false;
+  if (!hasSupabaseConfig) {
+    showSetupRequired();
+    return false;
+  }
   try {
     const { createClient } = await import("@supabase/supabase-js");
     supabase = createClient(supabaseConfig.url, supabaseConfig.anonKey);
@@ -139,10 +146,19 @@ async function initSupabase() {
     renderAccountState();
     return true;
   } catch (error) {
-    console.warn("Supabase indisponivel, usando modo demonstracao.", error);
+    console.warn("Supabase indisponivel.", error);
+    showSetupRequired("Nao foi possivel conectar ao Supabase. Confira as variaveis da Vercel e o redeploy.");
     renderAccountState();
     return false;
   }
+}
+
+function showSetupRequired(message) {
+  if (demoAllowed && isLocalHost) return;
+  $("#auth").classList.add("hidden");
+  $("#app").classList.add("hidden");
+  $("#setup-required").classList.remove("hidden");
+  if (message) $("#setup-required p").textContent = message;
 }
 
 async function loadCloudState() {
@@ -179,7 +195,7 @@ function normalizeCloudIds() {
     ...payment,
     id: isUuid(payment.id) ? payment.id : newId()
   }));
-  localStorage.setItem(storageKey, JSON.stringify(state));
+  localStorage.setItem(activeStorageKey(), JSON.stringify(state));
 }
 
 async function loadRelationalState() {
@@ -242,7 +258,7 @@ async function loadRelationalState() {
   if (!projectsRes.data.length && !tasksRes.data.length && !paymentsRes.data.length && !threadsRes.data.length) {
     state = emptyState();
   }
-  localStorage.setItem(storageKey, JSON.stringify(state));
+  localStorage.setItem(activeStorageKey(), JSON.stringify(state));
 }
 
 async function persistRelationalState() {
@@ -356,8 +372,8 @@ function renderAccountState() {
   const email = currentUser?.email;
   const isCloud = Boolean(supabase && currentUser);
   $("#profile-name").textContent = email ? email.split("@")[0] : "Joao R.";
-  $("#profile-mode").textContent = isCloud ? "Conta sincronizada" : cloudAvailable ? "Supabase pronto" : "Modo demonstracao";
-  $("#sync-pill").textContent = isCloud ? "Sincronizado" : cloudAvailable ? "Aguardando login" : "Demo local";
+  $("#profile-mode").textContent = isCloud ? "Conta sincronizada" : cloudAvailable ? "Aguardando login" : "SaaS nao configurado";
+  $("#sync-pill").textContent = isCloud ? "Sincronizado" : cloudAvailable ? "Aguardando login" : demoAllowed ? "Demo local" : "Configurar Supabase";
   $("#sync-pill").className = `sync-pill ${isCloud ? "cloud" : "demo"}`;
   $("#logout-button").classList.toggle("hidden", !isCloud);
 }
@@ -376,7 +392,8 @@ function toast(message) {
 
 async function loginWithEmail() {
   if (!supabase) {
-    showAuth("dashboard");
+    if (demoAllowed) showAuth("dashboard");
+    else showSetupRequired();
     return;
   }
   const email = $("#login-panel input[type='email']").value.trim();
@@ -402,7 +419,8 @@ async function loginWithEmail() {
 
 async function loginWithGoogle() {
   if (!supabase) {
-    showAuth("dashboard");
+    if (demoAllowed) showAuth("dashboard");
+    else showSetupRequired();
     return;
   }
   const { error } = await supabase.auth.signInWithOAuth({
@@ -733,6 +751,14 @@ function bindEvents() {
   });
 
   $("#quick-add").addEventListener("click", () => openTaskDialog());
+  $("#open-demo-anyway").addEventListener("click", () => {
+    demoAllowed = true;
+    localStorage.setItem("nextfreela-demo-allowed", "true");
+    state = JSON.parse(localStorage.getItem(storageKey) || "null") || structuredClone(seed);
+    normalizeLocalState();
+    $("#setup-required").classList.add("hidden");
+    showAuth("login");
+  });
   $("#email-login").addEventListener("click", loginWithEmail);
   $("#google-login").addEventListener("click", loginWithGoogle);
   $("#logout-button").addEventListener("click", logout);
