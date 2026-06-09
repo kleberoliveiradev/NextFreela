@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NextFreela</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="auth" class="auth-shell">
+    <section class="auth-brand">
+      <div class="brand">Next<span>Freela</span></div>
+      <div>
+        <h1>Gerencie sua carreira criativa com liberdade.</h1>
+        <p>Projetos, agenda, financeiro e clientes em um só lugar feito para designers freelancers.</p>
+      </div>
+    </section>
+
+    <section class="auth-panel" id="login-panel">
+      <div>
+        <h2>Entrar no NextFreela</h2>
+        <p>Escolha como quer acessar</p>
+      </div>
+      <button class="button button-ghost full" id="google-login">Continuar com Google</button>
+      <div class="divider"><span></span>ou entre com email<span></span></div>
+      <label class="field">Email<input type="email" value="joao@jrstudio.com"></label>
+      <label class="field">Senha<input type="password" value="nextfreela"></label>
+      <button class="button button-primary full" id="email-login">Entrar</button>
+      <p class="notice hidden" id="login-notice"></p>
+      <button class="text-button" data-auth="recover">Esqueci minha senha</button>
+      <p class="terms">Nao tem conta? <button data-auth="onboarding">Criar conta gratis</button></p>
+    </section>
+
+    <section class="auth-panel hidden" id="onboarding-panel">
+      <div class="stepper">
+        <span class="done">Dados</span>
+        <span class="done">Trabalho</span>
+        <span>Projeto</span>
+      </div>
+      <div>
+        <h2>Crie seu primeiro projeto</h2>
+        <p>Adicione um projeto em andamento para comecar a organizar seu trabalho.</p>
+      </div>
+      <label class="field">Nome do projeto<input id="first-project-name" value="Identidade visual loja Aura"></label>
+      <div class="field-grid">
+        <label class="field">Cliente<input id="first-project-client" value="Aura Studio"></label>
+        <label class="field">Valor (R$)<input id="first-project-value" value="4200"></label>
+      </div>
+      <label class="field">Prazo de entrega<input id="first-project-date" type="date" value="2026-06-18"></label>
+      <div class="split-actions">
+        <button class="button button-ghost" data-auth="dashboard">Pular</button>
+        <button class="button button-primary" id="create-first-project">Entrar no NextFreela</button>
+      </div>
+    </section>
+
+    <section class="auth-panel hidden" id="recover-panel">
+      <div class="icon-tile">?</div>
+      <div>
+        <h2>Recuperar senha</h2>
+        <p>Digite seu email e enviamos um link para criar uma nova senha.</p>
+      </div>
+      <label class="field">Email cadastrado<input value="joao@jrstudio.com"></label>
+      <button class="button button-primary full" id="send-recovery">Enviar link</button>
+      <p class="notice hidden" id="recovery-notice">Link enviado. Verifique sua caixa de entrada.</p>
+      <button class="button button-ghost full" data-auth="login">Voltar para login</button>
+    </section>
+  </div>
+
+  <div id="app" class="app-shell hidden">
+    <aside class="sidebar">
+      <div class="sidebar-logo brand">Next<span>Freela</span></div>
+      <nav class="side-nav">
+        <small>Visao geral</small>
+        <button class="nav-item active" data-view="dashboard"><span data-icon="dashboard"></span>Dashboard</button>
+        <button class="nav-item" data-view="agenda"><span data-icon="calendar"></span>Agenda</button>
+        <button class="nav-item" data-view="projetos"><span data-icon="folder"></span>Projetos</button>
+        <small>Gestao</small>
+        <button class="nav-item" data-view="financeiro"><span data-icon="chart"></span>Financeiro</button>
+        <button class="nav-item" data-view="clientes"><span data-icon="message"></span>Clientes</button>
+        <button class="nav-item" data-view="alertas"><span data-icon="bell"></span>Alertas <b id="alert-count">3</b></button>
+        <small>Conta</small>
+        <button class="nav-item" data-view="configuracoes"><span data-icon="settings"></span>Configuracoes</button>
+      </nav>
+      <div class="profile">
+        <div class="avatar">JR</div>
+        <div>
+          <strong>Joao R.</strong>
+          <span>Plano Pro</span>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow" id="today-label">Segunda, 8 jun</p>
+          <h2 id="view-title">Bom dia, Joao!</h2>
+        </div>
+        <div class="top-actions">
+          <button class="icon-button" data-view="alertas" aria-label="Alertas"><span data-icon="bell"></span><i></i></button>
+          <button class="button button-primary" id="quick-add"><span data-icon="plus"></span>Nova tarefa</button>
+        </div>
+      </header>
+
+      <section id="dashboard" class="view active">
+        <div class="metrics" id="metrics"></div>
+        <div class="layout-two">
+          <article class="panel">
+            <div class="panel-head">
+              <h3>Tarefas de hoje</h3>
+              <button class="text-button" data-view="agenda">ver agenda</button>
+            </div>
+            <div class="stack" id="today-tasks"></div>
+          </article>
+          <article class="panel">
+            <div class="panel-head">
+              <h3>Resumo financeiro</h3>
+              <button class="text-button" data-view="financeiro">detalhes</button>
+            </div>
+            <div class="money-card">
+              <span>Recebido no mes</span>
+              <strong id="month-paid">R$ 0</strong>
+              <small id="month-pending">R$ 0 pendentes</small>
+            </div>
+            <div class="stack compact" id="payment-preview"></div>
+          </article>
+        </div>
+        <article class="panel">
+          <div class="panel-head">
+            <h3>Projetos em andamento</h3>
+            <button class="text-button" data-view="projetos">ver todos</button>
+          </div>
+          <div class="stack" id="project-preview"></div>
+        </article>
+      </section>
+
+      <section id="projetos" class="view">
+        <div class="toolbar">
+          <div class="tabs" id="project-tabs">
+            <button class="active" data-filter="todos">Todos</button>
+            <button data-filter="ativo">Ativos</button>
+            <button data-filter="revisao">Revisao</button>
+            <button data-filter="atrasado">Atrasados</button>
+            <button data-filter="aguardando">Aguardando</button>
+          </div>
+          <button class="button button-primary" id="add-project"><span data-icon="plus"></span>Novo projeto</button>
+        </div>
+        <div class="stack" id="project-list"></div>
+      </section>
+
+      <section id="agenda" class="view">
+        <div class="week-grid" id="week-grid"></div>
+      </section>
+
+      <section id="financeiro" class="view">
+        <div class="metrics" id="finance-metrics"></div>
+        <article class="panel">
+          <div class="panel-head">
+            <h3>Pagamentos</h3>
+            <button class="button button-ghost" id="add-payment">Registrar pagamento</button>
+          </div>
+          <div class="stack" id="payment-list"></div>
+        </article>
+      </section>
+
+      <section id="clientes" class="view">
+        <div class="chat-layout">
+          <aside class="client-list" id="client-list"></aside>
+          <article class="chat-panel">
+            <div class="chat-head">
+              <div>
+                <h3 id="chat-client">Cliente</h3>
+                <span id="chat-project">Projeto</span>
+              </div>
+              <span class="status-badge active">online</span>
+            </div>
+            <div class="chat-messages" id="chat-messages"></div>
+            <form class="chat-form" id="chat-form">
+              <input id="chat-input" placeholder="Escreva uma mensagem...">
+              <button class="icon-button send" aria-label="Enviar"><span data-icon="send"></span></button>
+            </form>
+          </article>
+        </div>
+      </section>
+
+      <section id="alertas" class="view">
+        <article class="panel">
+          <div class="panel-head">
+            <h3>Alertas importantes</h3>
+            <button class="button button-ghost" id="clear-alerts">Marcar como lidos</button>
+          </div>
+          <div class="stack" id="alerts-list"></div>
+        </article>
+      </section>
+
+      <section id="configuracoes" class="view">
+        <div class="settings-grid">
+          <article class="panel">
+            <div class="panel-head"><h3>Perfil</h3></div>
+            <label class="field">Nome<input value="Joao Ribeiro"></label>
+            <label class="field">Email<input value="joao@jrstudio.com"></label>
+            <label class="field">Especialidade<input value="Designer de marcas e produto"></label>
+            <button class="button button-primary">Salvar perfil</button>
+          </article>
+          <article class="panel">
+            <div class="panel-head"><h3>Preferencias</h3></div>
+            <label class="toggle-row"><span><strong>Notificacoes de prazo</strong><small>Receber alertas antes da entrega</small></span><input type="checkbox" checked></label>
+            <label class="toggle-row"><span><strong>Modo compacto</strong><small>Reduzir espacamentos da interface</small></span><input type="checkbox" id="compact-mode"></label>
+            <label class="toggle-row"><span><strong>Tema escuro</strong><small>Usar fundo escuro para trabalhar a noite</small></span><input type="checkbox" id="dark-mode"></label>
+          </article>
+          <article class="panel">
+            <div class="panel-head"><h3>Plano</h3></div>
+            <div class="plan current"><strong>Pro</strong><span>R$ 39/mes</span><b>Atual</b></div>
+            <div class="plan"><strong>Studio</strong><span>R$ 79/mes</span><b>Upgrade</b></div>
+          </article>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="task-dialog" class="modal">
+    <form method="dialog">
+      <h3>Nova tarefa</h3>
+      <label class="field">Tarefa<input id="task-name" value="Enviar previa para cliente"></label>
+      <label class="field">Projeto<select id="task-project"></select></label>
+      <div class="field-grid">
+        <label class="field">Dia<select id="task-day"></select></label>
+        <label class="field">Prioridade<select id="task-priority"><option value="alta">Alta</option><option value="media">Media</option><option value="normal">Normal</option></select></label>
+      </div>
+      <div class="split-actions">
+        <button class="button button-ghost">Cancelar</button>
+        <button class="button button-primary" id="save-task" value="default">Salvar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="project-dialog" class="modal">
+    <form method="dialog">
+      <h3>Novo projeto</h3>
+      <label class="field">Nome<input id="project-name" value="Landing page campanha"></label>
+      <label class="field">Cliente<input id="project-client" value="Cliente novo"></label>
+      <div class="field-grid">
+        <label class="field">Prazo<input id="project-due" type="date" value="2026-06-24"></label>
+        <label class="field">Valor (R$)<input id="project-value" type="number" value="2800"></label>
+      </div>
+      <label class="field">Status<select id="project-status"><option value="ativo">Ativo</option><option value="revisao">Revisao</option><option value="aguardando">Aguardando</option></select></label>
+      <div class="split-actions">
+        <button class="button button-ghost">Cancelar</button>
+        <button class="button button-primary" id="save-project" value="default">Criar projeto</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
