@@ -457,18 +457,20 @@ async function sendRecoveryEmail() {
 
 function renderMetrics() {
   const activeProjects = state.projects.filter((project) => project.status !== "concluido").length;
-  const dueSoon = state.projects.filter((project) => ["atrasado", "revisao"].includes(project.status)).length;
+  const nextDueProject = state.projects
+    .filter((project) => project.status !== "concluido")
+    .sort((a, b) => a.due.localeCompare(b.due))[0];
+  const nextDueDays = nextDueProject ? Math.max(0, Math.ceil((new Date(`${nextDueProject.due}T12:00:00`) - new Date()) / 86400000)) : 0;
   const openTasks = state.tasks.filter((task) => !task.done).length;
   const pending = state.payments.filter((payment) => payment.status !== "pago").reduce((sum, payment) => sum + payment.value, 0);
   const totalProjectValue = state.projects.reduce((sum, project) => sum + project.value, 0);
+  const paid = state.payments.filter((payment) => payment.status === "pago").reduce((sum, payment) => sum + payment.value, 0);
   $("#metrics").innerHTML = [
-    ["Projetos ativos", activeProjects, `${dueSoon} exigem atencao`],
-    ["Tarefas abertas", openTasks, "na semana atual"],
-    ["Receita prevista", money(state.payments.reduce((sum, payment) => sum + payment.value, 0)), "este mes"],
-    ["A receber", money(pending), "pendentes ou atrasados"]
+    ["Projetos ativos", activeProjects, `${openTasks} tarefas abertas`],
+    ["Recebido no mes", money(paid), "confirmado"],
+    ["Proximo prazo", nextDueProject ? `${nextDueDays} dias` : "--", nextDueProject?.name || "sem prazo"],
   ].map(([label, value, sub]) => `<div class="metric"><span>${label}</span><strong>${value}</strong><small>${sub}</small></div>`).join("");
 
-  const paid = state.payments.filter((payment) => payment.status === "pago").reduce((sum, payment) => sum + payment.value, 0);
   $("#month-paid").textContent = money(paid);
   $("#month-pending").textContent = `${money(pending)} pendentes`;
   $("#finance-metrics").innerHTML = [
